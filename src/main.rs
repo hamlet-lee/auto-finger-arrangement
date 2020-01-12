@@ -1,3 +1,5 @@
+use crate::Finger::First;
+
 #[derive(Debug, Clone)]
 struct FingerStatus {
     finger_status_list: Vec<FingerStringAndPose>
@@ -33,7 +35,7 @@ struct Choice {
     accumulate_cost: f32
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 enum Finger {
     First,
     Second,
@@ -41,7 +43,7 @@ enum Finger {
     Fourth
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 enum ViolinString {
     G, D, A, E
 }
@@ -52,15 +54,107 @@ struct Note {
     violin_string: ViolinString
 }
 
-fn create_finger_status_list_playing_note(
-    playing_note: &Note, allow_approaching: bool) -> Vec<FingerStatus> {
-    vec!(FingerStatus {finger_status_list: vec!(FingerStringAndPose{
-        finger: Finger::First,
-        violin_string: ViolinString::G,
-        action: Pose::LIFT
-    })})
+fn enumerate_violin_string_and_action(allow_approaching: bool) -> Vec<(ViolinString, Pose)> {
+    let mut ret_vec = Vec::new();
+    for violin_string in &[ViolinString::G, ViolinString::D, ViolinString::A, ViolinString::E] {
+        let pose_list = if allow_approaching {
+            vec!(Pose::DOWN, Pose::LIFT, Pose::APPROACHING)
+        } else {
+            vec!(Pose::DOWN, Pose::LIFT)
+        };
+        for action in pose_list {
+            ret_vec.push( (violin_string.clone(), action.clone()) );
+        }
+    }
+    ret_vec
 }
 
+
+fn enumerate_string_action_for_four(allow_approach: bool) -> Vec<Vec<(ViolinString,Pose)>> {
+    let mut v : Vec<(ViolinString, Pose)> = Vec::new();
+    for i in 0..4 {
+        v.push((ViolinString::G, Pose::LIFT));
+    }
+
+    let mut ret : Vec<Vec<(ViolinString,Pose)>> = Vec::new();
+    fill(&mut v, 0, & mut ret, allow_approach);
+    ret
+}
+
+fn fill(mut v: & mut Vec<(ViolinString, Pose)>,
+        idx: i32,
+        out: & mut Vec<Vec<(ViolinString, Pose)>>,
+        allow_approach: bool) {
+
+    if idx >= 4 {
+        out.push(v.clone());
+        return;
+    } else {
+        let enum_of_string_action : Vec<(ViolinString, Pose)> = enumerate_violin_string_and_action(allow_approach);
+        for string_action in enum_of_string_action {
+            v[idx as usize] = (string_action.0, string_action.1);
+            fill(&mut v, idx + 1, out, allow_approach);
+        }
+    }
+}
+
+fn down_finger_no_disturb(finger: Finger, playing: Option<Finger>) -> bool {
+    match playing {
+        None => false,
+        Some(Finger::First) => finger == Finger::First,
+        Some(Finger::Second) => finger == Finger::First
+                                    || finger == Finger::Second,
+        Some(Finger::Third) => finger == Finger::First
+                                    || finger == Finger::Second
+                                    || finger == Finger::Third,
+        Some(Finger::Fourth) => finger == Finger::First
+            || finger == Finger::Second
+            || finger == Finger::Third
+            || finger == Finger::Fourth
+    }
+}
+
+fn create_finger_status_list_playing_note(
+    playing_note: &Note,
+    allow_approaching: bool) -> Vec<FingerStatus> {
+
+    let possibles = enumerate_string_action_for_four(allow_approaching);
+    let vfap : Vec<FingerStatus> = possibles.into_iter().map(|x| {
+        let mut v : Vec<FingerStringAndPose> = Vec::new();
+        let flist = &[Finger::First, Finger::Second, Finger::Third, Finger::Fourth];
+        for i in (0..4) {
+            let fap = FingerStringAndPose{
+                finger: flist[i].clone(),
+                violin_string: x[0].0.clone(),
+                action: x[0].1.clone()
+            };
+            v.push(fap);
+        }
+        FingerStatus {
+            finger_status_list: v
+        }
+    }).collect();
+    let r = vfap.into_iter().filter( |fs| {
+        fs.finger_status_list.iter().all(|fsp| {
+            match fsp.action {
+                Pose::LIFT | Pose::APPROACHING => true,
+                Pose::DOWN => {
+                    if fsp.violin_string != playing_note.violin_string {
+                        true
+                    } else {
+                        down_finger_no_disturb(fsp.finger.clone(), playing_note.finger.clone())
+                    }
+                }
+            }
+        })
+    }).collect();
+    return r;
+//    vec!(FingerStatus {finger_status_list: vec!(FingerStringAndPose{
+//        finger: Finger::First,
+//        violin_string: ViolinString::G,
+//        action: Pose::LIFT
+//    })})
+}
 fn find_best_way (from:&StageNodes, to: & mut StageNodes) -> () {
     for i in 0..to.nodes.len() {
         to.nodes[i].choice.prev_pos = 0;
