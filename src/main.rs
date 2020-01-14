@@ -35,7 +35,7 @@ struct Choice {
     accumulate_cost: f32
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, PartialOrd)]
 enum Finger {
     First,
     Second,
@@ -101,16 +101,7 @@ fn fill(mut v: & mut Vec<(ViolinString, Pose)>,
 fn down_finger_no_disturb(finger: Finger, playing: Option<Finger>) -> bool {
     match playing {
         None => false,
-        Some(Finger::First) => finger == Finger::First,
-        Some(Finger::Second) => finger == Finger::First
-                                    || finger == Finger::Second,
-        Some(Finger::Third) => finger == Finger::First
-                                    || finger == Finger::Second
-                                    || finger == Finger::Third,
-        Some(Finger::Fourth) => finger == Finger::First
-            || finger == Finger::Second
-            || finger == Finger::Third
-            || finger == Finger::Fourth
+        Some(pf) => finger <= pf
     }
 }
 
@@ -134,8 +125,17 @@ fn create_finger_status_list_playing_note(
             finger_status_list: v
         }
     }).collect();
+
+    // deal with playing note
     let r = vfap.into_iter().filter( |fs| {
-        fs.finger_status_list.iter().all(|fsp| {
+        fs.finger_status_list.iter().any(|fsp| {
+            match playing_note.finger {
+                None => true,
+                Some(pf) => pf == fsp.finger && fsp.action == Pose::DOWN
+                    && fsp.violin_string == playing_note.violin_string
+            }
+        })
+        && fs.finger_status_list.iter().all(|fsp| {
             match fsp.action {
                 Pose::LIFT | Pose::APPROACHING => true,
                 Pose::DOWN => {
