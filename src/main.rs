@@ -11,7 +11,7 @@ struct FingerStringAndPose {
     action: Pose
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialOrd, PartialEq)]
 enum Pose {
     LIFT,
     DOWN,
@@ -129,9 +129,9 @@ fn create_finger_status_list_playing_note(
     // deal with playing note
     let r = vfap.into_iter().filter( |fs| {
         fs.finger_status_list.iter().any(|fsp| {
-            match playing_note.finger {
+            match &playing_note.finger {
                 None => true,
-                Some(pf) => pf == fsp.finger && fsp.action == Pose::DOWN
+                Some(pf) => *pf == fsp.finger && fsp.action == Pose::DOWN
                     && fsp.violin_string == playing_note.violin_string
             }
         })
