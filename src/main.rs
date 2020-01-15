@@ -1,17 +1,22 @@
 use crate::Finger::First;
+use std::collections::HashMap;
 
 #[derive(Debug, Clone)]
 struct FingerStatus {
-    finger_status_list: Vec<FingerStringAndPose>
+    finger_status_map: HashMap<Finger, StringAndPose>
 }
-#[derive(Debug, Clone)]
-struct FingerStringAndPose {
-    finger: Finger,
+//#[derive(Debug, Clone)]
+//struct FingerStringAndPose {
+//    finger: Finger,
+//    violin_string: ViolinString,
+//    action: Pose
+//}
+#[derive(Debug, Clone, PartialEq)]
+struct StringAndPose {
     violin_string: ViolinString,
-    action: Pose
+    pose: Pose
 }
-
-#[derive(Debug, Clone, PartialOrd, PartialEq)]
+#[derive(Debug, Clone, PartialOrd, PartialEq, Copy)]
 enum Pose {
     LIFT,
     DOWN,
@@ -35,7 +40,7 @@ struct Choice {
     accumulate_cost: f32
 }
 
-#[derive(Debug, Clone, PartialEq, PartialOrd)]
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Hash)]
 enum Finger {
     First,
     Second,
@@ -111,38 +116,37 @@ fn create_finger_status_list_playing_note(
 
     let possibles = enumerate_string_action_for_four(allow_approaching);
     let vfap : Vec<FingerStatus> = possibles.into_iter().map(|x| {
-        let mut v : Vec<FingerStringAndPose> = Vec::new();
+        let mut v : HashMap<Finger, StringAndPose> = HashMap::new();
         let flist = &[Finger::First, Finger::Second, Finger::Third, Finger::Fourth];
         for i in (0..4) {
-            let fap = FingerStringAndPose{
-                finger: flist[i].clone(),
+            let sp = StringAndPose{
                 violin_string: x[0].0.clone(),
-                action: x[0].1.clone()
+                pose: x[0].1.clone()
             };
-            v.push(fap);
+            v.insert(flist[i].clone(), sp);
         }
         FingerStatus {
-            finger_status_list: v
+            finger_status_map : v
         }
     }).collect();
 
     // deal with playing note
     let r = vfap.into_iter().filter( |fs| {
-        fs.finger_status_list.iter().any(|fsp| {
+        fs.finger_status_map.iter().any(|fsp| {
             match &playing_note.finger {
                 None => true,
-                Some(pf) => *pf == fsp.finger && fsp.action == Pose::DOWN
-                    && fsp.violin_string == playing_note.violin_string
+                Some(pf) => *pf == *(fsp.0) && fsp.1.pose == Pose::DOWN
+                    && fsp.1.violin_string == playing_note.violin_string
             }
         })
-        && fs.finger_status_list.iter().all(|fsp| {
-            match fsp.action {
+        && fs.finger_status_map.iter().all(|fsp| {
+            match fsp.1.pose {
                 Pose::LIFT | Pose::APPROACHING => true,
                 Pose::DOWN => {
-                    if fsp.violin_string != playing_note.violin_string {
+                    if fsp.1.violin_string != playing_note.violin_string {
                         true
                     } else {
-                        down_finger_no_disturb(fsp.finger.clone(), playing_note.finger.clone())
+                        down_finger_no_disturb(fsp.0.clone(), playing_note.finger.clone())
                     }
                 }
             }
@@ -155,15 +159,67 @@ fn create_finger_status_list_playing_note(
 //        action: Pose::LIFT
 //    })})
 }
+
+const STRING_SWITCH_COST : f32 = 1.0;
+const HARD_COST: f32 = 1.0;
+const IMPOSSIBLE_COST: f32 = 10000.0;
+const NATUAL_COST: f32 = 0.1;
+const NO_COST: f32 = 0.0;
+fn transition_cost(from: &FingerStatus, to: &FingerStatus) -> f32 {
+    let mut cost: f32 = 0.0;
+    for i in &[Finger::First, Finger::Second, Finger::Third, Finger::Fourth] {
+        let from_sp = from.finger_status_map.get(i).unwrap();
+        let to_sp = to.finger_status_map.get(i).unwrap();
+        if from_sp.violin_string != to_sp.violin_string { cost += STRING_SWITCH_COST; }
+        cost += match (from_sp.pose, to_sp.pose ) {
+            (Pose::APPROACHING, Pose::DOWN) => NATUAL_COST,
+            (Pose::APPROACHING, _) => IMPOSSIBLE_COST, // else not allowed
+            (Pose::DOWN, Pose::LIFT) => NATUAL_COST,
+            (Pose::LIFT, Pose::APPROACHING) => NATUAL_COST,
+            (_, Pose::APPROACHING) => IMPOSSIBLE_COST, // else not allowed
+            (Pose::LIFT, Pose::DOWN) => HARD_COST,
+            (Pose::LIFT, Pose::LIFT) | (Pose::DOWN, Pose::DOWN) => NO_COST
+        }
+    };
+    cost
+
+}
 fn find_best_way (from:&StageNodes, to: & mut StageNodes) -> () {
+    println!("finding from {} states to {} states", from.nodes.len(), to.nodes.len());
     for i in 0..to.nodes.len() {
-        to.nodes[i].choice.prev_pos = 0;
-        to.nodes[i].choice.accumulate_cost = from.nodes[0].choice.accumulate_cost + 0.1;
+        if i % 100 == 0 {
+            println!("searched {} in {}", i, to.nodes.len());
+        }
+        let mut min_cost: f32 = 10000.0;
+        let mut min_cost_idx: i32 = -1;
+        for j in 0..from.nodes.len() {
+            if from.nodes[j].choice.accumulate_cost >= min_cost ||
+                from.nodes[j].choice.accumulate_cost >= IMPOSSIBLE_COST {
+                continue;
+            }
+            let cost = from.nodes[j].choice.accumulate_cost + transition_cost(&from.nodes[j].finger_status, &to.nodes[i].finger_status);
+            if cost < min_cost as f32 {
+                min_cost = cost;
+                min_cost_idx = j as i32;
+            }
+        }
+        to.nodes[i].choice.prev_pos = min_cost_idx;
+        to.nodes[i].choice.accumulate_cost = min_cost;
     }
 }
 
 fn compute_transition(from: &FingerStatus, to: &FingerStatus) -> String {
-    "xxx".to_string()
+    // "xxx".to_string()
+    let mut moves : Vec<String> = Vec::new();
+    for f in &[Finger::First, Finger::Second, Finger::Third, Finger::Fourth] {
+        let sf_from = &from.finger_status_map[f];
+        let sf_to = &to.finger_status_map[f];
+        if sf_from != sf_to {
+            moves.push( format!("Finger {:?} from {:?} to {:?}",
+                                f, sf_from, sf_to))
+        }
+    }
+    moves.into_iter().collect()
 }
 fn main() {
     let score = vec!(
@@ -182,6 +238,7 @@ fn main() {
     let mut pos = 0;
     println!("Planning for score: {:#?}", score);
     for note in score.clone() {
+        println!("creating state list ...");
         let vec_finger_status: Vec<FingerStatus>
             = create_finger_status_list_playing_note(
             &note, false);
@@ -191,6 +248,7 @@ fn main() {
                 choice: Choice {prev_pos: -1, accumulate_cost: 0.0 }
         }).collect();
         stages.push(StageNodes{nodes});
+        println!("created state list");
         if pos > 0 {
             // https://stackoverflow.com/questions/26409316/how-do-i-extract-two-mutable-elements-from-a-vec-in-rust
             let copy_from;
@@ -199,11 +257,15 @@ fn main() {
                 copy_from = from;
             }
             let to = &mut stages[pos];
+            println!("finding best way ...");
             find_best_way(&copy_from,
                           to);
+            println!("found best way");
         }
+        println!("stage {} done", pos);
         pos = pos + 1;
 
+        println!("creating state list ...");
         let vec_finger_status: Vec<FingerStatus>
             = create_finger_status_list_playing_note(
             &note, true);
@@ -212,6 +274,7 @@ fn main() {
             choice: Choice {prev_pos: -1, accumulate_cost: 0.0 }
         }).collect();
         stages.push(StageNodes{nodes});
+        println!("created state list");
 
         let copy_from;
         {
@@ -220,8 +283,13 @@ fn main() {
         }
         let to = stages.get_mut(pos).unwrap();
 
+
+        println!("finding best way ...");
         find_best_way(&copy_from,
                           to);
+
+        println!("found best way");
+        println!("stage {} done", pos);
         pos = pos + 1;
     }
     println!("Computing done!");
