@@ -1,9 +1,89 @@
-use crate::Finger::First;
-use std::collections::HashMap;
+//use std::collections::HashMap;
+use std::iter;
+//use std::io::Read;
+
+#[derive(Debug, Clone)]
+struct MyMap {
+    string_and_pose_arr: [StringAndPose;4]
+}
+
+impl MyMap {
+    fn values(&self) -> impl Iterator<Item = (Finger, StringAndPose)> {
+        let a = iter::once((Finger::First, self.string_and_pose_arr[0]));
+        let b = iter::once((Finger::Second, self.string_and_pose_arr[1]));
+        let c = iter::once((Finger::Third, self.string_and_pose_arr[2]));
+        let d = iter::once((Finger::Fourth, self.string_and_pose_arr[3]));
+        a.chain(b).chain(c).chain(d)
+    }
+    fn set(&mut self, idx: usize, node: StringAndPose) {
+        self.string_and_pose_arr[idx] = node;
+    }
+    fn get(&self, idx: usize) -> StringAndPose{
+        self.string_and_pose_arr[idx].clone()
+    }
+    fn insert(&mut self, f: Finger, v: StringAndPose) {
+        self.set(match f {
+            Finger::First => 0,
+            Finger::Second => 1,
+            Finger::Third => 2,
+            Finger::Fourth => 3
+        }, v)
+    }
+    fn get_by_finger (&self, f: &Finger) -> StringAndPose {
+        self.get(match *f {
+            Finger::First => 0,
+            Finger::Second => 1,
+            Finger::Third => 2,
+            Finger::Fourth => 3
+        })
+    }
+    fn new() -> MyMap {
+        MyMap {
+            string_and_pose_arr: [StringAndPose{
+                violin_string: ViolinString::G,
+                pose: Pose::LIFT
+            };4]
+        }
+    }
+}
+
+// https://stackoverflow.com/questions/30218886/how-to-implement-iterator-and-intoiterator-for-a-simple-struct
+impl IntoIterator for MyMap {
+    type Item = (Finger, StringAndPose);
+    type IntoIter = MyMapIntoIterator;
+
+    fn into_iter(self) -> Self::IntoIter {
+        MyMapIntoIterator {
+            my_map: self,
+            index: 0,
+        }
+    }
+}
+
+struct MyMapIntoIterator {
+    my_map: MyMap,
+    index: usize
+}
+
+
+impl Iterator for MyMapIntoIterator {
+    type Item = (Finger, StringAndPose);
+    fn next(&mut self) -> Option<(Finger, StringAndPose)> {
+        let result = match self.index {
+            0 => (Finger::First, self.my_map.string_and_pose_arr[0]),
+            1 => (Finger::Second, self.my_map.string_and_pose_arr[1]),
+            2 => (Finger::Third, self.my_map.string_and_pose_arr[2]),
+            3 => (Finger::Fourth, self.my_map.string_and_pose_arr[3]),
+            _ => return None,
+        };
+        self.index += 1;
+        Some(result)
+    }
+}
 
 #[derive(Debug, Clone)]
 struct FingerStatus {
-    finger_status_map: HashMap<Finger, StringAndPose>
+    finger_status_map: MyMap
 }
 //#[derive(Debug, Clone)]
 //struct FingerStringAndPose {
@@ -11,7 +91,7 @@ struct FingerStatus {
 //    violin_string: ViolinString,
 //    action: Pose
 //}
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Copy)]
 struct StringAndPose {
     violin_string: ViolinString,
     pose: Pose
@@ -48,7 +128,7 @@ enum Finger {
     Fourth
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 enum ViolinString {
     G, D, A, E
 }
@@ -77,7 +157,7 @@ fn enumerate_violin_string_and_action(allow_approaching: bool) -> Vec<(ViolinStr
 
 fn enumerate_string_action_for_four(allow_approach: bool) -> Vec<Vec<(ViolinString,Pose)>> {
     let mut v : Vec<(ViolinString, Pose)> = Vec::new();
-    for i in 0..4 {
+    for _i in 0..4 {
         v.push((ViolinString::G, Pose::LIFT));
     }
 
@@ -116,9 +196,9 @@ fn create_finger_status_list_playing_note(
 
     let possibles = enumerate_string_action_for_four(allow_approaching);
     let vfap : Vec<FingerStatus> = possibles.into_iter().map(|x| {
-        let mut v : HashMap<Finger, StringAndPose> = HashMap::new();
+        let mut v : MyMap = MyMap::new();
         let flist = &[Finger::First, Finger::Second, Finger::Third, Finger::Fourth];
-        for i in (0..4) {
+        for i in 0..4 {
             let sp = StringAndPose{
                 violin_string: x[0].0.clone(),
                 pose: x[0].1.clone()
@@ -132,14 +212,14 @@ fn create_finger_status_list_playing_note(
 
     // deal with playing note
     let r = vfap.into_iter().filter( |fs| {
-        fs.finger_status_map.iter().any(|fsp| {
+        fs.finger_status_map.values().any(|fsp| {
             match &playing_note.finger {
                 None => true,
-                Some(pf) => *pf == *(fsp.0) && fsp.1.pose == Pose::DOWN
+                Some(pf) => *pf == (fsp.0) && fsp.1.pose == Pose::DOWN
                     && fsp.1.violin_string == playing_note.violin_string
             }
         })
-        && fs.finger_status_map.iter().all(|fsp| {
+        && fs.finger_status_map.values().all(|fsp| {
             match fsp.1.pose {
                 Pose::LIFT | Pose::APPROACHING => true,
                 Pose::DOWN => {
@@ -168,8 +248,8 @@ const NO_COST: f32 = 0.0;
 fn transition_cost(from: &FingerStatus, to: &FingerStatus) -> f32 {
     let mut cost: f32 = 0.0;
     for i in &[Finger::First, Finger::Second, Finger::Third, Finger::Fourth] {
-        let from_sp = from.finger_status_map.get(i).unwrap();
-        let to_sp = to.finger_status_map.get(i).unwrap();
+        let from_sp = from.finger_status_map.get_by_finger(i);
+        let to_sp = to.finger_status_map.get_by_finger(i);
         if from_sp.violin_string != to_sp.violin_string { cost += STRING_SWITCH_COST; }
         cost += match (from_sp.pose, to_sp.pose ) {
             (Pose::APPROACHING, Pose::DOWN) => NATUAL_COST,
@@ -212,8 +292,8 @@ fn compute_transition(from: &FingerStatus, to: &FingerStatus) -> String {
     // "xxx".to_string()
     let mut moves : Vec<String> = Vec::new();
     for f in &[Finger::First, Finger::Second, Finger::Third, Finger::Fourth] {
-        let sf_from = &from.finger_status_map[f];
-        let sf_to = &to.finger_status_map[f];
+        let sf_from = &from.finger_status_map.get_by_finger(f);
+        let sf_to = &to.finger_status_map.get_by_finger(f);
         if sf_from != sf_to {
             moves.push( format!("Finger {:?} from {:?} to {:?}",
                                 f, sf_from, sf_to))
