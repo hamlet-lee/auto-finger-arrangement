@@ -466,24 +466,33 @@ fn main() {
         }
     }
 
-    for cur in 0..pos {
-        let node : &FingerStatusAndChoice = stages.get(cur).unwrap().nodes.get(choice_pos_array[cur] as usize).unwrap();
-        if cur == 0 {
-            // starting pose
-            println!("starting with status {:#?}\n play note {} = {:?}",
-                     node.finger_status, cur / 2 + 1, score.get( cur / 2));
-        } else {
+    let mut cur_stage = -1;
+    let mut note_idx = -1;
+    while cur_stage < pos {
+        if cur_stage >= 1 {
             // transition
-            let node_from: &FingerStatusAndChoice = stages.get(cur as usize).unwrap().nodes.get(choice_pos_array[cur-1] as usize).unwrap();
+            let node : &FingerStatusAndChoice = stages.get(cur_stage).unwrap().nodes.get(choice_pos_array[cur_stage] as usize).unwrap();
+            let node_from: &FingerStatusAndChoice = stages.get(cur_stage as usize).unwrap().nodes.get(choice_pos_array[cur_stage-1] as usize).unwrap();
             let transition = compute_transition(&node_from.finger_status, &node.finger_status);
-            println!(" with transition: {:#?} to status {:#?}, and then ", transition, node.finger_status);
+            // println!(" with transition: {:#?} to status {:#?}, and then ", transition, node.finger_status);
+            println!("intermediate transition {:#?}", transition);
         }
-
-        if cur % 2 == 1 {
-            println!("play note {} = {:?} ", cur / 2 + 1, score.get(cur / 2))
+        
+        cur_stage += 1;
+        note_idx += 1;
+        
+        let node : &FingerStatusAndChoice = stages.get(cur_stage).unwrap().nodes.get(choice_pos_array[cur_stage] as usize).unwrap();    
+        if cur_stage == 0 {
+            // starting pose and first note
+            println!("starting with status {:#?}\n play note {} = {:?}",
+                     node.finger_status, note_idx + 1, score.get( note_idx));
         } else {
-            println!("as middle action")
+            // second and etc notes
+            let node_from: &FingerStatusAndChoice = stages.get(cur_stage as usize).unwrap().nodes.get(choice_pos_array[cur_stage-1] as usize).unwrap();
+            let transition = compute_transition(&node_from.finger_status, &node.finger_status);
+            println!("instant transition {:#?}, and play note {} = {:?}",
+             transition, note_idx + 1, score.get(note_idx));
         }
-//        let transition = analyze_transition()
     }
+    println!("end of score");
 }
