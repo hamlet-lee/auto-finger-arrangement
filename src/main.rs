@@ -1,7 +1,54 @@
 //use std::collections::HashMap;
+use std::collections::HashMap;
 use std::iter;
 //use std::io::Read;
 
+#[cfg(test)]
+mod tests {
+    use crate::{FingerStatus, create_finger_status_list_playing_note, ViolinString, Note, Finger, is_playing_note, StringAndPose, MyMap, Pose};
+
+    #[test]
+    fn t0 () {
+        let note = Note {
+            finger: Some(Finger::First),
+            violin_string: ViolinString::G
+        };
+        let fs = FingerStatus {
+          finger_status_map: MyMap {
+              string_and_pose_arr: [
+                  StringAndPose {
+                      violin_string: ViolinString::G,
+                      pose: Pose::DOWN
+                  },
+                  StringAndPose {
+                      violin_string: ViolinString::G,
+                      pose: Pose::LIFT
+                  },
+                  StringAndPose {
+                      violin_string: ViolinString::G,
+                      pose: Pose::LIFT
+                  },
+                  StringAndPose {
+                      violin_string: ViolinString::G,
+                      pose: Pose::LIFT
+                  }
+              ]}
+        };
+        assert!( is_playing_note(&note, &fs))
+    }
+
+    #[test]
+    fn t1 () {
+        let note = Note {
+            finger: Some(Finger::First),
+            violin_string: ViolinString::G
+        };
+        let vec_finger_status: Vec<FingerStatus>
+            = create_finger_status_list_playing_note(
+            &note, false);
+        assert!( vec_finger_status.len() > 0)
+    }
+}
 #[derive(Debug, Clone)]
 struct MyMap {
     string_and_pose_arr: [StringAndPose;4]
@@ -212,25 +259,10 @@ fn create_finger_status_list_playing_note(
 
     // deal with playing note
     let r = vfap.into_iter().filter( |fs| {
-        fs.finger_status_map.values().any(|fsp| {
-            match &playing_note.finger {
-                None => true,
-                Some(pf) => *pf == (fsp.0) && fsp.1.pose == Pose::DOWN
-                    && fsp.1.violin_string == playing_note.violin_string
-            }
-        })
-        && fs.finger_status_map.values().all(|fsp| {
-            match fsp.1.pose {
-                Pose::LIFT | Pose::APPROACHING => true,
-                Pose::DOWN => {
-                    if fsp.1.violin_string != playing_note.violin_string {
-                        true
-                    } else {
-                        down_finger_no_disturb(fsp.0.clone(), playing_note.finger.clone())
-                    }
-                }
-            }
-        })
+        let t1 = is_playing_note(playing_note, fs);
+        println!("is_playing_note({:?}, {:?}) : {}", 
+            playing_note, fs, t1);
+        t1
     }).collect();
     return r;
 //    vec!(FingerStatus {finger_status_list: vec!(FingerStringAndPose{
@@ -240,6 +272,27 @@ fn create_finger_status_list_playing_note(
 //    })})
 }
 
+fn is_playing_note(playing_note: &Note, fs: &FingerStatus) -> bool {
+    fs.finger_status_map.values().any(|fsp| {
+        match &playing_note.finger {
+            None => true,
+            Some(pf) => *pf == (fsp.0) && fsp.1.pose == Pose::DOWN
+                && fsp.1.violin_string == playing_note.violin_string
+        }
+    })
+    && fs.finger_status_map.values().all(|fsp| {
+        match fsp.1.pose {
+            Pose::LIFT | Pose::APPROACHING => true,
+            Pose::DOWN => {
+                if fsp.1.violin_string != playing_note.violin_string {
+                    true
+                } else {
+                    down_finger_no_disturb(fsp.0.clone(), playing_note.finger.clone())
+                }
+            }
+        }
+    })
+}
 const STRING_SWITCH_COST : f32 = 1.0;
 const HARD_COST: f32 = 1.0;
 const IMPOSSIBLE_COST: f32 = 10000.0;
@@ -286,6 +339,19 @@ fn find_best_way (from:&StageNodes, to: & mut StageNodes) -> () {
         to.nodes[i].choice.prev_pos = min_cost_idx;
         to.nodes[i].choice.accumulate_cost = min_cost;
     }
+    
+    let mut m: HashMap<i32, u32> = HashMap::new();
+    // https://users.rust-lang.org/t/efficient-string-hashmaps-for-a-frequency-count/7752
+    for n in to.nodes.iter() {
+        let cost = n.choice.accumulate_cost;
+//        let prev = m.get(&(cost as i32));
+//        match prev {
+//            Some(v) => m.insert(cost as i32, v + 1),
+//            None => m.insert(cost as i32, 1)
+//        };
+        *m.entry(cost as i32).or_insert(0) += 1;
+    }
+    println!("stage accumulate cost dist.: {:?}", m);
 }
 
 fn compute_transition(from: &FingerStatus, to: &FingerStatus) -> String {
@@ -318,7 +384,7 @@ fn main() {
     let mut pos = 0;
     println!("Planning for score: {:#?}", score);
     for note in score.clone() {
-        println!("creating state list ...");
+        println!("creating state list for note {:?} ...", note);
         let vec_finger_status: Vec<FingerStatus>
             = create_finger_status_list_playing_note(
             &note, false);
@@ -327,8 +393,8 @@ fn main() {
                 finger_status: f.clone(),
                 choice: Choice {prev_pos: -1, accumulate_cost: 0.0 }
         }).collect();
+        println!("created state list with length: {}", nodes.len());
         stages.push(StageNodes{nodes});
-        println!("created state list");
         if pos > 0 {
             // https://stackoverflow.com/questions/26409316/how-do-i-extract-two-mutable-elements-from-a-vec-in-rust
             let copy_from;
@@ -394,6 +460,7 @@ fn main() {
             // look for other choice
             let stage_nodes: &StageNodes = stages.get(cur+1).unwrap();
             let back_pos = choice_pos_array[cur + 1];
+            println!("back_pos = {}", back_pos);
             let node : &FingerStatusAndChoice = stage_nodes.nodes.get(back_pos as usize).unwrap();
             choice_pos_array[cur] = node.choice.prev_pos;
         }
