@@ -247,8 +247,8 @@ fn create_finger_status_list_playing_note(
         let flist = &[Finger::First, Finger::Second, Finger::Third, Finger::Fourth];
         for i in 0..4 {
             let sp = StringAndPose{
-                violin_string: x[0].0.clone(),
-                pose: x[0].1.clone()
+                violin_string: x[i].0.clone(),
+                pose: x[i].1.clone()
             };
             v.insert(flist[i].clone(), sp);
         }
@@ -260,8 +260,8 @@ fn create_finger_status_list_playing_note(
     // deal with playing note
     let r = vfap.into_iter().filter( |fs| {
         let t1 = is_playing_note(playing_note, fs);
-        println!("is_playing_note({:?}, {:?}) : {}", 
-            playing_note, fs, t1);
+        // println!("is_playing_note({:?}, {:?}) : {}", 
+        //     playing_note, fs, t1);
         t1
     }).collect();
     return r;
