@@ -411,7 +411,12 @@ fn main() {
         println!("stage {} done", pos);
         pos = pos + 1;
 
-        println!("creating state list ...");
+        if (pos + 1) / 2 >= score.len() {
+            // intermediate transition after tail note
+            // is of no use
+            break;
+        }
+        println!("creating state list for intermediate transition ...");
         let vec_finger_status: Vec<FingerStatus>
             = create_finger_status_list_playing_note(
             &note, true);
@@ -468,6 +473,7 @@ fn main() {
 
     let mut cur_stage : i32 = -1;
     let mut note_idx : i32 = -1;
+    println!("stages.len = {}, pos = {}", stages.len(), pos);
     while cur_stage < pos as i32 {
         if cur_stage >= 1 {
             // transition
@@ -485,14 +491,19 @@ fn main() {
         if cur_stage == 0 {
             // starting pose and first note
             println!("starting with status {:#?}\n play note {} = {:?}",
-                     node.finger_status, note_idx + 1, score.get( note_idx as usize));
+                     node.finger_status, note_idx + 1, score.get( note_idx as usize).unwrap());
         } else {
             // second and etc notes
-            let node_from: &FingerStatusAndChoice = stages.get(cur_stage as usize).unwrap().nodes.get(choice_pos_array[cur_stage as usize -1] as usize).unwrap();
+            let node_from: &FingerStatusAndChoice =
+             stages.get(cur_stage as usize - 1).unwrap()
+                .nodes.get(
+                    choice_pos_array[cur_stage as usize -1]
+                     as usize).unwrap();
             let transition = compute_transition(&node_from.finger_status, &node.finger_status);
-            println!("instant transition {:#?}, and play note {} = {:?}",
-             transition, note_idx + 1, score.get(note_idx as usize));
+            println!("\nand finally {:#?}, then play note {} = {:?}",
+             transition, note_idx + 1, score.get(note_idx as usize).unwrap());
         }
+        cur_stage += 1;
     }
     println!("end of score");
 }
