@@ -368,16 +368,27 @@ fn compute_transition(from: &FingerStatus, to: &FingerStatus) -> String {
     moves.into_iter().collect()
 }
 fn main() {
+    // let score = vec!(
+    //     Note{ finger:None, violin_string: ViolinString::G},
+    //     Note{ finger:Some(Finger::First), violin_string: ViolinString::G},
+    //     Note{ finger:Some(Finger::Second), violin_string: ViolinString::G},
+    //     Note{ finger:Some(Finger::Third), violin_string: ViolinString::G},
+    //     Note{ finger:Some(Finger::Fourth), violin_string: ViolinString::G},
+    //     Note{ finger:Some(Finger::Third), violin_string: ViolinString::G},
+    //     Note{ finger:Some(Finger::Second), violin_string: ViolinString::G},
+    //     Note{ finger:Some(Finger::First), violin_string: ViolinString::G},
+    //     Note{ finger:None, violin_string: ViolinString::G},
+    // );
+
     let score = vec!(
-        Note{ finger:None, violin_string: ViolinString::G},
-        Note{ finger:Some(Finger::First), violin_string: ViolinString::G},
-        Note{ finger:Some(Finger::Second), violin_string: ViolinString::G},
-        Note{ finger:Some(Finger::Third), violin_string: ViolinString::G},
         Note{ finger:Some(Finger::Fourth), violin_string: ViolinString::G},
         Note{ finger:Some(Finger::Third), violin_string: ViolinString::G},
         Note{ finger:Some(Finger::Second), violin_string: ViolinString::G},
         Note{ finger:Some(Finger::First), violin_string: ViolinString::G},
-        Note{ finger:None, violin_string: ViolinString::G},
+        Note{ finger:Some(Finger::Second), violin_string: ViolinString::G},
+        Note{ finger:Some(Finger::First), violin_string: ViolinString::G},
+        Note{ finger:Some(Finger::Second), violin_string: ViolinString::G},
+        Note{ finger:Some(Finger::Third), violin_string: ViolinString::G},
     );
 
     let mut stages:Vec<StageNodes> = Vec::new();
