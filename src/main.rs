@@ -1,6 +1,9 @@
 //use std::collections::HashMap;
 use std::collections::HashMap;
 use std::iter;
+// https://docs.rs/internationalization/0.0.3/internationalization/
+// use internationalization::t;
+use std::fmt;
 //use std::io::Read;
 
 #[cfg(test)]
@@ -149,6 +152,15 @@ enum Pose {
     DOWN,
     APPROACHING
 }
+impl fmt::Display for Pose{
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", match self {
+            Pose::APPROACHING => "下落中",
+            Pose::DOWN => "按",
+            Pose::LIFT => "抬"
+        })
+    }
+}
 
 #[derive(Debug, Clone)]
 struct StageNodes {
@@ -159,6 +171,15 @@ struct StageNodes {
 struct FingerStatusAndChoice {
     finger_status: FingerStatus,
     choice: Choice
+}
+
+fn finger_status_to_str(fs: &FingerStatus) -> String {
+    let mut v: Vec<String>  = Vec::new();
+    for (idx, e) in fs.finger_status_map.string_and_pose_arr
+        .iter().enumerate() {
+            v.push(format!("[{}指 {} {}]", idx + 1, e.violin_string, e.pose))
+        };
+    v.join(" ")
 }
 
 #[derive(Debug, Clone)]
@@ -174,16 +195,45 @@ enum Finger {
     Third,
     Fourth
 }
+impl fmt::Display for Finger {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}指", match self {
+            Finger::First => 1,
+            Finger::Second => 2,
+            Finger::Third => 3,
+            Finger::Fourth => 4
+        })
+    }
+}
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 enum ViolinString {
     G, D, A, E
+}
+impl fmt::Display for ViolinString {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}弦", match self {
+            ViolinString::G => "G",
+            ViolinString::D => "D",
+            ViolinString::A => "A",
+            ViolinString::E => "E"
+        })
+    }
 }
 
 #[derive(Debug, Clone)]
 struct Note {
     finger: Option<Finger>,
     violin_string: ViolinString
+}
+
+impl fmt::Display for Note {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{} {}", self.violin_string, match &self.finger {
+            Some(fg) => format!("{}", fg),
+            None => String::from("0")
+        })
+    }  
 }
 
 fn enumerate_violin_string_and_action(allow_approaching: bool) -> Vec<(ViolinString, Pose)> {
@@ -390,10 +440,22 @@ fn main() {
         Note{ finger:Some(Finger::Second), violin_string: ViolinString::G},
         Note{ finger:Some(Finger::Third), violin_string: ViolinString::G},
     );
+    compute(&score);
+}
 
+fn score_to_str(score: &Vec<Note>) -> String {
+    score.iter().map(|x| format!("{}",x))
+        .collect::<Vec<String>>()
+        .join(" | ")
+}
+
+
+fn compute (score:&Vec<Note>) {
+    let lang = "cn";
     let mut stages:Vec<StageNodes> = Vec::new();
     let mut pos = 0;
-    println!("Planning for score: {:#?}", score);
+    println!("为演奏如下乐谱做规划: {:?}", 
+        score_to_str(score));
     for note in score.clone() {
         println!("creating state list for note {:?} ...", note);
         let vec_finger_status: Vec<FingerStatus>
@@ -501,8 +563,8 @@ fn main() {
         let node : &FingerStatusAndChoice = stages.get(cur_stage as usize).unwrap().nodes.get(choice_pos_array[cur_stage as usize] as usize).unwrap();
         if cur_stage == 0 {
             // starting pose and first note
-            println!("starting with status {:#?}\n play note {} = {:?}",
-                     node.finger_status, note_idx + 1, score.get( note_idx as usize).unwrap());
+            println!("开始动作 {}\n 演奏{}",
+                     finger_status_to_str(&node.finger_status), score.get( note_idx as usize).unwrap());
         } else {
             // second and etc notes
             let node_from: &FingerStatusAndChoice =
