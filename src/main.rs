@@ -155,9 +155,9 @@ enum Pose {
 impl fmt::Display for Pose{
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{}", match self {
-            Pose::APPROACHING => "下落中",
-            Pose::DOWN => "按",
-            Pose::LIFT => "抬"
+            Pose::APPROACHING => "落向指板",
+            Pose::DOWN => "按下",
+            Pose::LIFT => "抬起"
         })
     }
 }
@@ -404,19 +404,33 @@ fn find_best_way (from:&StageNodes, to: & mut StageNodes) -> () {
     println!("stage accumulate cost dist.: {:?}", m);
 }
 
-fn compute_transition(from: &FingerStatus, to: &FingerStatus) -> String {
+fn compute_transition(from: &FingerStatus, to: &FingerStatus) -> Option<String> {
     // "xxx".to_string()
     let mut moves : Vec<String> = Vec::new();
     for f in &[Finger::First, Finger::Second, Finger::Third, Finger::Fourth] {
         let sf_from = &from.finger_status_map.get_by_finger(f);
         let sf_to = &to.finger_status_map.get_by_finger(f);
         if sf_from != sf_to {
-            moves.push( format!("Finger {:?} from {:?} to {:?}",
-                                f, sf_from, sf_to))
+            moves.push( format!("{} {}",
+                                f, compute_finger_transition(sf_from, sf_to)))
         }
     }
-    moves.into_iter().collect()
+    if moves.len() > 0 {
+        Some(moves.into_iter().collect())
+    } else {
+        None
+    }
 }
+
+fn compute_finger_transition(sf_from: &StringAndPose, sf_to: &StringAndPose) -> String {
+    let mut v : Vec<String> = Vec::new();
+    if sf_from.violin_string != sf_to.violin_string {
+        v.push(format!("从 {} 移到 {}", sf_from.violin_string, sf_to.violin_string));
+    }
+    v.push(format!("{}", sf_to.pose));
+    v.join(" , 然后 ")
+}
+
 fn main() {
     // let score = vec!(
     //     Note{ finger:None, violin_string: ViolinString::G},
@@ -444,17 +458,17 @@ fn main() {
 }
 
 fn score_to_str(score: &Vec<Note>) -> String {
-    score.iter().map(|x| format!("{}",x))
+    score.iter().map(|x| format!("[{}]",x))
         .collect::<Vec<String>>()
-        .join(" | ")
+        .join(" ")
 }
 
 
 fn compute (score:&Vec<Note>) {
-    let lang = "cn";
+    // let lang = "cn";
     let mut stages:Vec<StageNodes> = Vec::new();
     let mut pos = 0;
-    println!("为演奏如下乐谱做规划: {:?}", 
+    println!("为演奏如下段落做规划: {}", 
         score_to_str(score));
     for note in score.clone() {
         println!("creating state list for note {:?} ...", note);
@@ -554,7 +568,11 @@ fn compute (score:&Vec<Note>) {
             let node_from: &FingerStatusAndChoice = stages.get(cur_stage as usize).unwrap().nodes.get(choice_pos_array[cur_stage as usize -1] as usize).unwrap();
             let transition = compute_transition(&node_from.finger_status, &node.finger_status);
             // println!(" with transition: {:#?} to status {:#?}, and then ", transition, node.finger_status);
-            println!("intermediate transition {:#?}", transition);
+            if let Some(x) = transition {
+                println!(">同时做如下预备动作 {}", x);
+            } else {
+                // println!(">保持");
+            }
         }
         
         cur_stage += 1;
@@ -563,7 +581,7 @@ fn compute (score:&Vec<Note>) {
         let node : &FingerStatusAndChoice = stages.get(cur_stage as usize).unwrap().nodes.get(choice_pos_array[cur_stage as usize] as usize).unwrap();
         if cur_stage == 0 {
             // starting pose and first note
-            println!("开始动作 {}\n 演奏{}",
+            println!("预备动作 {}\n奏出 [{}] 的 音",
                      finger_status_to_str(&node.finger_status), score.get( note_idx as usize).unwrap());
         } else {
             // second and etc notes
@@ -573,10 +591,13 @@ fn compute (score:&Vec<Note>) {
                     choice_pos_array[cur_stage as usize -1]
                      as usize).unwrap();
             let transition = compute_transition(&node_from.finger_status, &node.finger_status);
-            println!("\nand finally {:#?}, then play note {} = {:?}",
-             transition, note_idx + 1, score.get(note_idx as usize).unwrap());
+            if let Some(x) = transition {
+                println!("{} 并 奏出 [{}] 的音", x, score.get(note_idx as usize).unwrap())
+            } else {
+                println!("奏出 [{}] 的音", score.get(note_idx as usize).unwrap())
+            }
         }
         cur_stage += 1;
     }
-    println!("end of score");
+    println!("段落结束。");
 }
