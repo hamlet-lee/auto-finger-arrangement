@@ -432,19 +432,19 @@ fn compute_finger_transition(sf_from: &StringAndPose, sf_to: &StringAndPose) -> 
 }
 
 fn main() {
-    // let score = vec!(
-    //     Note{ finger:None, violin_string: ViolinString::G},
-    //     Note{ finger:Some(Finger::First), violin_string: ViolinString::G},
-    //     Note{ finger:Some(Finger::Second), violin_string: ViolinString::G},
-    //     Note{ finger:Some(Finger::Third), violin_string: ViolinString::G},
-    //     Note{ finger:Some(Finger::Fourth), violin_string: ViolinString::G},
-    //     Note{ finger:Some(Finger::Third), violin_string: ViolinString::G},
-    //     Note{ finger:Some(Finger::Second), violin_string: ViolinString::G},
-    //     Note{ finger:Some(Finger::First), violin_string: ViolinString::G},
-    //     Note{ finger:None, violin_string: ViolinString::G},
-    // );
+    let paragraph1 = vec!(
+        Note{ finger:None, violin_string: ViolinString::G},
+        Note{ finger:Some(Finger::First), violin_string: ViolinString::G},
+        Note{ finger:Some(Finger::Second), violin_string: ViolinString::G},
+        Note{ finger:Some(Finger::Third), violin_string: ViolinString::G},
+        Note{ finger:Some(Finger::Fourth), violin_string: ViolinString::G},
+        Note{ finger:Some(Finger::Third), violin_string: ViolinString::G},
+        Note{ finger:Some(Finger::Second), violin_string: ViolinString::G},
+        Note{ finger:Some(Finger::First), violin_string: ViolinString::G},
+        Note{ finger:None, violin_string: ViolinString::G},
+    );
 
-    let score = vec!(
+    let paragraph2 = vec!(
         Note{ finger:Some(Finger::Fourth), violin_string: ViolinString::G},
         Note{ finger:Some(Finger::Third), violin_string: ViolinString::G},
         Note{ finger:Some(Finger::Second), violin_string: ViolinString::G},
@@ -454,23 +454,45 @@ fn main() {
         Note{ finger:Some(Finger::Second), violin_string: ViolinString::G},
         Note{ finger:Some(Finger::Third), violin_string: ViolinString::G},
     );
-    compute(&score);
+
+    let paragraph3 = vec!(
+        Note{ finger:Some(Finger::Fourth), violin_string: ViolinString::G},
+        Note{ finger:Some(Finger::Third), violin_string: ViolinString::G},
+        Note{ finger:Some(Finger::Second), violin_string: ViolinString::G},
+        Note{ finger:Some(Finger::First), violin_string: ViolinString::G},
+       
+        Note{ finger:Some(Finger::Second), violin_string: ViolinString::G},
+        Note{ finger:Some(Finger::First), violin_string: ViolinString::G},
+        Note{ finger:Some(Finger::Second), violin_string: ViolinString::G},
+        Note{ finger:Some(Finger::Third), violin_string: ViolinString::G},
+       
+        Note{ finger:Some(Finger::Fourth), violin_string: ViolinString::G},
+        Note{ finger:Some(Finger::Third), violin_string: ViolinString::G},
+        Note{ finger:Some(Finger::Fourth), violin_string: ViolinString::G},
+        Note{ finger:Some(Finger::Second), violin_string: ViolinString::D},
+       
+        Note{ finger:Some(Finger::First), violin_string: ViolinString::D},
+        Note{ finger:None, violin_string: ViolinString::D},
+        Note{ finger:Some(Finger::First), violin_string: ViolinString::D},
+        Note{ finger:Some(Finger::Third), violin_string: ViolinString::D},
+       );
+    compute(&paragraph3);
 }
 
-fn score_to_str(score: &Vec<Note>) -> String {
-    score.iter().map(|x| format!("[{}]",x))
+fn paragraph_to_str(paragraph: &Vec<Note>) -> String {
+    paragraph.iter().map(|x| format!("[{}]",x))
         .collect::<Vec<String>>()
         .join(" ")
 }
 
 
-fn compute (score:&Vec<Note>) {
+fn compute (paragraph:&Vec<Note>) {
     // let lang = "cn";
     let mut stages:Vec<StageNodes> = Vec::new();
     let mut pos = 0;
     println!("为演奏如下段落做规划: {}", 
-        score_to_str(score));
-    for note in score.clone() {
+        paragraph_to_str(paragraph));
+    for note in paragraph.clone() {
         println!("creating state list for note {:?} ...", note);
         let vec_finger_status: Vec<FingerStatus>
             = create_finger_status_list_playing_note(
@@ -498,7 +520,7 @@ fn compute (score:&Vec<Note>) {
         println!("stage {} done", pos);
         pos = pos + 1;
 
-        if (pos + 1) / 2 >= score.len() {
+        if (pos + 1) / 2 >= paragraph.len() {
             // intermediate transition after tail note
             // is of no use
             break;
@@ -550,11 +572,14 @@ fn compute (score:&Vec<Note>) {
             choice_pos_array[cur] = min_cost_pos;
         } else {
             // look for other choice
-            let stage_nodes: &StageNodes = stages.get(cur+1).unwrap();
-            let back_pos = choice_pos_array[cur + 1];
-            println!("back_pos = {}", back_pos);
-            let node : &FingerStatusAndChoice = stage_nodes.nodes.get(back_pos as usize).unwrap();
-            choice_pos_array[cur] = node.choice.prev_pos;
+            let next_stage_nodes: &StageNodes = stages.get(cur+1).unwrap();
+            let next_stage_chosen = choice_pos_array[cur + 1];
+            let next_stage_chosen_node : &FingerStatusAndChoice = next_stage_nodes.nodes.get(next_stage_chosen as usize).unwrap();
+            let this_stage_chosen_pos = next_stage_chosen_node.choice.prev_pos;
+            choice_pos_array[cur] = this_stage_chosen_pos;
+            println!("stage {} chosen pos = {}, node = {:?}",
+                cur, this_stage_chosen_pos, stages.get(cur).unwrap().nodes.get(this_stage_chosen_pos as usize).unwrap());
+            
         }
     }
 
@@ -569,10 +594,11 @@ fn compute (score:&Vec<Note>) {
             let transition = compute_transition(&node_from.finger_status, &node.finger_status);
             // println!(" with transition: {:#?} to status {:#?}, and then ", transition, node.finger_status);
             if let Some(x) = transition {
-                println!(">同时做如下预备动作 {}", x);
+                println!("> 同时做如下预备动作 {}", x);
             } else {
-                // println!(">保持");
+                println!(">");
             }
+            println!("");
         }
         
         cur_stage += 1;
@@ -582,7 +608,7 @@ fn compute (score:&Vec<Note>) {
         if cur_stage == 0 {
             // starting pose and first note
             println!("预备动作 {}\n奏出 [{}] 的 音",
-                     finger_status_to_str(&node.finger_status), score.get( note_idx as usize).unwrap());
+                     finger_status_to_str(&node.finger_status), paragraph.get( note_idx as usize).unwrap());
         } else {
             // second and etc notes
             let node_from: &FingerStatusAndChoice =
@@ -592,9 +618,9 @@ fn compute (score:&Vec<Note>) {
                      as usize).unwrap();
             let transition = compute_transition(&node_from.finger_status, &node.finger_status);
             if let Some(x) = transition {
-                println!("{} 并 奏出 [{}] 的音", x, score.get(note_idx as usize).unwrap())
+                println!("{} 并 奏出 [{}] 的音", x, paragraph.get(note_idx as usize).unwrap())
             } else {
-                println!("奏出 [{}] 的音", score.get(note_idx as usize).unwrap())
+                println!("奏出 [{}] 的音", paragraph.get(note_idx as usize).unwrap())
             }
         }
         cur_stage += 1;
