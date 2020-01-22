@@ -1,3 +1,5 @@
+// 还需要清理无用的保留指, done
+// TODO动作描述：抬其并移动到另一根弦 compute_finger_transition()
 //use std::collections::HashMap;
 use std::collections::HashMap;
 use std::iter;
@@ -363,12 +365,28 @@ const HARD_COST: f32 = 1.0;
 const IMPOSSIBLE_COST: f32 = 10000.0;
 const NATUAL_COST: f32 = 0.1;
 const NO_COST: f32 = 0.0;
-fn transition_cost(from: &FingerStatus, to: &FingerStatus) -> f32 {
+const CROSS_STRING_PRESSING_COST: f32 = 0.4;
+fn transition_cost(from: &FingerStatus, to: &FingerStatus, is_to_intermediate: bool) -> f32 {
     let mut cost: f32 = 0.0;
+    
+    // simutaneous string change has less cost
+    let mut string_change_pair : Vec<(ViolinString,ViolinString)> = Vec::new();
+    
+    // pressed strings
+    let mut pressed_string: Vec<ViolinString> = Vec::new();
     for i in &[Finger::First, Finger::Second, Finger::Third, Finger::Fourth] {
         let from_sp = from.finger_status_map.get_by_finger(i);
         let to_sp = to.finger_status_map.get_by_finger(i);
-        if from_sp.violin_string != to_sp.violin_string { cost += STRING_SWITCH_COST; }
+
+        if to_sp.pose == Pose::DOWN && !pressed_string.contains(&to_sp.violin_string) {
+            pressed_string.push(to_sp.violin_string);
+        }
+
+        if from_sp.violin_string != to_sp.violin_string {
+            if !string_change_pair.contains(&(from_sp.violin_string,to_sp.violin_string)) {
+                string_change_pair.push((from_sp.violin_string, to_sp.violin_string))
+            }
+        }
         cost += match (from_sp.pose, to_sp.pose ) {
             (Pose::APPROACHING, Pose::DOWN) => NATUAL_COST,
             (Pose::APPROACHING, _) => IMPOSSIBLE_COST, // else not allowed
@@ -376,13 +394,23 @@ fn transition_cost(from: &FingerStatus, to: &FingerStatus) -> f32 {
             (Pose::LIFT, Pose::APPROACHING) => NATUAL_COST,
             (_, Pose::APPROACHING) => IMPOSSIBLE_COST, // else not allowed
             (Pose::LIFT, Pose::DOWN) => HARD_COST,
-            (Pose::LIFT, Pose::LIFT) | (Pose::DOWN, Pose::DOWN) => NO_COST
+            (Pose::LIFT, Pose::LIFT) => NO_COST,
+            (Pose::DOWN, Pose::DOWN) => NO_COST
         }
     };
-    cost
-
+    // pressing different string when playing is harder
+    if !is_to_intermediate && pressed_string.len() > 1 { 
+        cost += CROSS_STRING_PRESSING_COST * (pressed_string.len() as f32 - 1.0);
+    }
+    // merged change string cost
+    cost += STRING_SWITCH_COST * (string_change_pair.len() as f32);
+    if is_to_intermediate {
+        cost * 0.9
+    } else {
+        cost
+    }
 }
-fn find_best_way (from:&StageNodes, to: & mut StageNodes) -> () {
+fn find_best_way (from:&StageNodes, to: & mut StageNodes, is_to_intermediate: bool) -> () {
     println!("finding from {} states to {} states", from.nodes.len(), to.nodes.len());
     for i in 0..to.nodes.len() {
         if i % 100 == 0 {
@@ -395,7 +423,9 @@ fn find_best_way (from:&StageNodes, to: & mut StageNodes) -> () {
                 from.nodes[j].choice.accumulate_cost >= IMPOSSIBLE_COST {
                 continue;
             }
-            let cost = from.nodes[j].choice.accumulate_cost + transition_cost(&from.nodes[j].finger_status, &to.nodes[i].finger_status);
+            let cost = from.nodes[j].choice.accumulate_cost +
+                 transition_cost(&from.nodes[j].finger_status,
+                     &to.nodes[i].finger_status, is_to_intermediate);
             if cost < min_cost as f32 {
                 min_cost = cost;
                 min_cost_idx = j as i32;
@@ -529,7 +559,7 @@ fn compute (paragraph:&Vec<Note>) {
             let to = &mut stages[pos];
             println!("finding best way ...");
             find_best_way(&copy_from,
-                          to);
+                          to, false);
             println!("found best way");
         }
         println!("stage {} done", pos);
@@ -561,7 +591,7 @@ fn compute (paragraph:&Vec<Note>) {
 
         println!("finding best way ...");
         find_best_way(&copy_from,
-                          to);
+                          to, true);
 
         println!("found best way");
         println!("stage {} done", pos);
