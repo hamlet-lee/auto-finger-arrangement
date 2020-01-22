@@ -8,7 +8,8 @@ use std::fmt;
 
 #[cfg(test)]
 mod tests {
-    use crate::{FingerStatus, create_finger_status_list_playing_note, ViolinString, Note, Finger, is_playing_note, StringAndPose, MyMap, Pose};
+    use crate::compute_finger_transition;
+use crate::{FingerStatus, create_finger_status_list_playing_note, ViolinString, Note, Finger, is_playing_note, StringAndPose, MyMap, Pose};
 
     #[test]
     fn t0 () {
@@ -50,6 +51,20 @@ mod tests {
             = create_finger_status_list_playing_note(
             &note, false);
         assert!( vec_finger_status.len() > 0)
+    }
+
+    #[test]
+    fn t2() {
+        let x = compute_finger_transition(
+            &StringAndPose {
+                violin_string: ViolinString::G,
+                pose: Pose::DOWN
+            }, 
+            &StringAndPose {
+                violin_string: ViolinString::D,
+                pose: Pose::DOWN
+        });
+        assert_eq!("从 G弦 移到 D弦 , 然后 按下", x);
     }
 }
 #[derive(Debug, Clone)]
@@ -411,12 +426,12 @@ fn compute_transition(from: &FingerStatus, to: &FingerStatus) -> Option<String> 
         let sf_from = &from.finger_status_map.get_by_finger(f);
         let sf_to = &to.finger_status_map.get_by_finger(f);
         if sf_from != sf_to {
-            moves.push( format!("{} {}",
+            moves.push( format!("[{} {}]",
                                 f, compute_finger_transition(sf_from, sf_to)))
         }
     }
     if moves.len() > 0 {
-        Some(moves.into_iter().collect())
+        Some(moves.join(", "))
     } else {
         None
     }
@@ -590,8 +605,10 @@ fn compute (paragraph:&Vec<Note>) {
         if cur_stage >= 1 {
             // transition
             let node : &FingerStatusAndChoice = stages.get(cur_stage as usize).unwrap().nodes.get(choice_pos_array[cur_stage as usize] as usize).unwrap();
-            let node_from: &FingerStatusAndChoice = stages.get(cur_stage as usize).unwrap().nodes.get(choice_pos_array[cur_stage as usize -1] as usize).unwrap();
-            let transition = compute_transition(&node_from.finger_status, &node.finger_status);
+            let node_from: &FingerStatusAndChoice = stages.get( (cur_stage - 1) as usize).unwrap().nodes.get(choice_pos_array[cur_stage as usize -1] as usize).unwrap();
+            let transition = compute_transition(
+                &node_from.finger_status,
+                 &node.finger_status);
             // println!(" with transition: {:#?} to status {:#?}, and then ", transition, node.finger_status);
             if let Some(x) = transition {
                 println!("> 同时做如下预备动作 {}", x);
