@@ -7,6 +7,44 @@ use std::iter;
 // use internationalization::t;
 use std::fmt;
 //use std::io::Read;
+use std::fs::File;
+use std::io::{prelude::*, BufReader};
+
+fn read_paragraph_from_file (file_name: &str) -> Result<Vec<Note>, String> {
+    let file = File::open(file_name).unwrap();
+    let reader = BufReader::new(file);
+    let violin_strings = vec!("G","D","A","E");
+    let mut cur_violin_string : Option<ViolinString> = None;
+    let mut ret : Vec<Note> = Vec::new();
+    for line in reader.lines() {
+        let s = line.unwrap();
+        if s.starts_with("#") || s.trim().len() == 0 {
+            continue;
+        }
+        if violin_strings.contains(&s.as_str()) {
+            cur_violin_string = match s.as_str() {
+                "G" => Some(ViolinString::G),
+                "D" => Some(ViolinString::D),
+                "A" => Some(ViolinString::A),
+                "E" => Some(ViolinString::E),
+                _ => return Err(format!("弦{}不存在", s))
+            };
+        } else {
+            ret.push( Note {
+                violin_string: cur_violin_string.expect("需要先设置当前弦G/D/A/E"),
+                finger: match s.as_str() {
+                    "0" => None,
+                    "1" => Some(Finger::First),
+                    "2" => Some(Finger::Second),
+                    "3" => Some(Finger::Third),
+                    "4" => Some(Finger::Fourth),
+                    _ => return Err(format!("手指{}不存在", s))
+                }
+            })
+        }
+    }
+    Ok(ret)
+}
 
 #[cfg(test)]
 mod tests {
@@ -469,10 +507,15 @@ fn compute_transition(from: &FingerStatus, to: &FingerStatus) -> Option<String> 
 
 fn compute_finger_transition(sf_from: &StringAndPose, sf_to: &StringAndPose) -> String {
     let mut v : Vec<String> = Vec::new();
+    if sf_from.pose == Pose::DOWN {
+       v.push(format!("抬起"));
+    }
     if sf_from.violin_string != sf_to.violin_string {
         v.push(format!("从 {} 移到 {}", sf_from.violin_string, sf_to.violin_string));
     }
-    v.push(format!("{}", sf_to.pose));
+    if sf_to.pose != Pose::LIFT {
+        v.push(format!("{}", sf_to.pose));
+    }
     v.join(" , 然后 ")
 }
 
@@ -521,7 +564,9 @@ fn main() {
         Note{ finger:Some(Finger::First), violin_string: ViolinString::D},
         Note{ finger:Some(Finger::Third), violin_string: ViolinString::D},
        );
-    compute(&paragraph3);
+
+    let paragraph4 = read_paragraph_from_file("paragraph4.txt").unwrap();
+    compute(&paragraph4);
 }
 
 fn paragraph_to_str(paragraph: &Vec<Note>) -> String {
