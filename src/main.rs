@@ -107,7 +107,7 @@ use crate::{FingerStatus, create_finger_status_list_playing_note, ViolinString, 
         assert_eq!("从 G弦 移到 D弦 , 然后 按下", x);
     }
 }
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Copy)]
 struct MyMap {
     string_and_pose_arr: [StringAndPose;4]
 }
@@ -186,7 +186,7 @@ impl Iterator for MyMapIntoIterator {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Copy)]
 struct FingerStatus {
     finger_status_map: MyMap
 }
@@ -196,12 +196,12 @@ struct FingerStatus {
 //    violin_string: ViolinString,
 //    action: Pose
 //}
-#[derive(Debug, Clone, PartialEq, Copy)]
+#[derive(Debug, Clone, PartialEq, Copy, Eq, Hash)]
 struct StringAndPose {
     violin_string: ViolinString,
     pose: Pose
 }
-#[derive(Debug, Clone, PartialOrd, PartialEq, Copy)]
+#[derive(Debug, Clone, PartialOrd, PartialEq, Copy, Eq, Hash)]
 enum Pose {
     LIFT,
     DOWN,
@@ -261,7 +261,7 @@ impl fmt::Display for Finger {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 enum ViolinString {
     G, D, A, E
 }
@@ -398,12 +398,30 @@ fn is_playing_note(playing_note: &Note, fs: &FingerStatus) -> bool {
         }
     })
 }
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+struct StateTuple ( FingerStatus, FingerStatus, bool );
+type CacheMap = HashMap<StateTuple, f32>;
+
 const STRING_SWITCH_COST : f32 = 1.0;
 const HARD_COST: f32 = 1.0;
 const IMPOSSIBLE_COST: f32 = 10000.0;
-const NATUAL_COST: f32 = 0.1;
+const NATURAL_COST: f32 = 0.1;
 const NO_COST: f32 = 0.0;
 const CROSS_STRING_PRESSING_COST: f32 = 0.4;
+
+fn cached_transition_cost(from: &FingerStatus, to: &FingerStatus, is_to_intermediate: bool,
+                          cache: &mut CacheMap) -> f32 {
+    let k = StateTuple(*from, *to,is_to_intermediate);
+    let c = cache.get(&k);
+    if c.is_some() {
+        *c.unwrap()
+    } else {
+        let r = transition_cost(from, to, is_to_intermediate);
+        cache.insert(k, r);
+        r
+    }
+}
 fn transition_cost(from: &FingerStatus, to: &FingerStatus, is_to_intermediate: bool) -> f32 {
     let mut cost: f32 = 0.0;
     
@@ -426,10 +444,10 @@ fn transition_cost(from: &FingerStatus, to: &FingerStatus, is_to_intermediate: b
             }
         }
         cost += match (from_sp.pose, to_sp.pose ) {
-            (Pose::APPROACHING, Pose::DOWN) => NATUAL_COST,
+            (Pose::APPROACHING, Pose::DOWN) => NATURAL_COST,
             (Pose::APPROACHING, _) => IMPOSSIBLE_COST, // else not allowed
-            (Pose::DOWN, Pose::LIFT) => NATUAL_COST,
-            (Pose::LIFT, Pose::APPROACHING) => NATUAL_COST,
+            (Pose::DOWN, Pose::LIFT) => NATURAL_COST,
+            (Pose::LIFT, Pose::APPROACHING) => NATURAL_COST,
             (_, Pose::APPROACHING) => IMPOSSIBLE_COST, // else not allowed
             (Pose::LIFT, Pose::DOWN) => HARD_COST,
             (Pose::LIFT, Pose::LIFT) => NO_COST,
@@ -448,7 +466,7 @@ fn transition_cost(from: &FingerStatus, to: &FingerStatus, is_to_intermediate: b
         cost
     }
 }
-fn find_best_way (from:&StageNodes, to: & mut StageNodes, is_to_intermediate: bool) -> () {
+fn find_best_way (from:&StageNodes, to: & mut StageNodes, is_to_intermediate: bool, cache: &mut CacheMap) -> () {
     println!("finding from {} states to {} states", from.nodes.len(), to.nodes.len());
     for i in 0..to.nodes.len() {
         if i % 100 == 0 {
@@ -462,8 +480,8 @@ fn find_best_way (from:&StageNodes, to: & mut StageNodes, is_to_intermediate: bo
                 continue;
             }
             let cost = from.nodes[j].choice.accumulate_cost +
-                 transition_cost(&from.nodes[j].finger_status,
-                     &to.nodes[i].finger_status, is_to_intermediate);
+                 cached_transition_cost(&from.nodes[j].finger_status,
+                     &to.nodes[i].finger_status, is_to_intermediate, cache);
             if cost < min_cost as f32 {
                 min_cost = cost;
                 min_cost_idx = j as i32;
@@ -577,6 +595,7 @@ fn paragraph_to_str(paragraph: &Vec<Note>) -> String {
 
 
 fn compute (paragraph:&Vec<Note>) {
+    let cache = &mut CacheMap::new();
     // let lang = "cn";
     let mut stages:Vec<StageNodes> = Vec::new();
     let mut pos = 0;
@@ -602,7 +621,7 @@ fn compute (paragraph:&Vec<Note>) {
             let to = &mut b[0];
             println!("finding best way ...");
             find_best_way(&from,
-                          to, false);
+                          to, false, cache);
             println!("found best way");
         }
         println!("stage {} done", pos);
@@ -630,7 +649,7 @@ fn compute (paragraph:&Vec<Note>) {
 
         println!("finding best way ...");
         find_best_way(&from,
-                          to, true);
+                          to, true, cache);
 
         println!("found best way");
         println!("stage {} done", pos);
