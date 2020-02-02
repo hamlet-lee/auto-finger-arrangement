@@ -407,7 +407,7 @@ const CROSS_STRING_PRESSING_COST: f32 = 0.4;
 fn transition_cost(from: &FingerStatus, to: &FingerStatus, is_to_intermediate: bool) -> f32 {
     let mut cost: f32 = 0.0;
     
-    // simutaneous string change has less cost
+    // simultaneous string change has less cost
     let mut string_change_pair : Vec<(ViolinString,ViolinString)> = Vec::new();
     
     // pressed strings
@@ -582,7 +582,7 @@ fn compute (paragraph:&Vec<Note>) {
     let mut pos = 0;
     println!("为演奏如下段落做规划: {}", 
         paragraph_to_str(paragraph));
-    for note in paragraph.clone() {
+    for note in paragraph {
         println!("creating state list for note {:?} ...", note);
         let vec_finger_status: Vec<FingerStatus>
             = create_finger_status_list_playing_note(
@@ -596,14 +596,12 @@ fn compute (paragraph:&Vec<Note>) {
         stages.push(StageNodes{nodes});
         if pos > 0 {
             // https://stackoverflow.com/questions/26409316/how-do-i-extract-two-mutable-elements-from-a-vec-in-rust
-            let copy_from;
-            {
-                let from = stages[pos - 1].clone() ;
-                copy_from = from;
-            }
-            let to = &mut stages[pos];
+            // https://stackoverflow.com/questions/30073684/how-to-get-mutable-references-to-two-array-elements-at-the-same-time
+            let (a,b) = stages.split_at_mut(pos);
+            let from = &a[a.len()-1];
+            let to = &mut b[0];
             println!("finding best way ...");
-            find_best_way(&copy_from,
+            find_best_way(&from,
                           to, false);
             println!("found best way");
         }
@@ -626,16 +624,12 @@ fn compute (paragraph:&Vec<Note>) {
         stages.push(StageNodes{nodes});
         println!("created state list");
 
-        let copy_from;
-        {
-            let from = stages.get(pos - 1).unwrap().clone();
-            copy_from = from;
-        }
-        let to = stages.get_mut(pos).unwrap();
-
+        let (a,b) = stages.split_at_mut(pos);
+        let from = &a[a.len()-1];
+        let to = &mut b[0];
 
         println!("finding best way ...");
-        find_best_way(&copy_from,
+        find_best_way(&from,
                           to, true);
 
         println!("found best way");
